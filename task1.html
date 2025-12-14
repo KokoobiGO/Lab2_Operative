@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task 1: FAT File System - Complete Beginner's Guide</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        h2 {
+            color: #667eea;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            font-size: 2em;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        h3 {
+            color: #764ba2;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+
+        h4 {
+            color: #555;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            font-size: 1.2em;
+        }
+
+        p, li {
+            margin-bottom: 15px;
+            font-size: 1.05em;
+        }
+
+        ul, ol {
+            margin-left: 30px;
+            margin-bottom: 20px;
+        }
+
+        .info-box {
+            background: #f0f7ff;
+            border-left: 5px solid #667eea;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+
+        .warning-box {
+            background: #fff3cd;
+            border-left: 5px solid #ffc107;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+
+        .success-box {
+            background: #d4edda;
+            border-left: 5px solid #28a745;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+
+        .code-block {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.95em;
+            line-height: 1.5;
+        }
+
+        .inline-code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            color: #e83e8c;
+            font-size: 0.9em;
+        }
+
+        .diagram {
+            background: #f9f9f9;
+            border: 2px solid #ddd;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            font-family: monospace;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+
+        th {
+            background: #667eea;
+            color: white;
+            font-weight: bold;
+        }
+
+        tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+
+        .emoji {
+            font-size: 1.3em;
+        }
+
+        .step-number {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+
+        .visual-example {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .highlight {
+            background: #fff3cd;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+
+        footer {
+            background: #2d2d2d;
+            color: white;
+            text-align: center;
+            padding: 20px;
+            margin-top: 40px;
+        }
+
+        .toc {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+
+        .toc h3 {
+            color: #667eea;
+            margin-top: 0;
+        }
+
+        .toc ul {
+            list-style: none;
+            margin-left: 0;
+        }
+
+        .toc li {
+            margin-bottom: 8px;
+        }
+
+        .toc a {
+            color: #667eea;
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        .toc a:hover {
+            color: #764ba2;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><span class="emoji">📁</span> Task 1: FAT File System</h1>
+            <p>Complete Beginner's Guide to Implementation</p>
+        </header>
+
+        <div class="content">
+            <!-- Table of Contents -->
+            <div class="toc">
+                <h3>📑 Table of Contents</h3>
+                <ul>
+                    <li><a href="#what-is-fs">1. What is a File System?</a></li>
+                    <li><a href="#what-is-fat">2. What is FAT?</a></li>
+                    <li><a href="#structure">3. Our File System Structure</a></li>
+                    <li><a href="#operations">4. The Four Main Operations</a></li>
+                    <li><a href="#helpers">5. Helper Functions</a></li>
+                    <li><a href="#testing">6. Testing Your Implementation</a></li>
+                    <li><a href="#errors">7. Common Errors</a></li>
+                    <li><a href="#summary">8. Key Concepts Summary</a></li>
+                </ul>
+            </div>
+
+            <!-- Section 1 -->
+            <h2 id="what-is-fs"><span class="emoji">🤔</span> What is a File System?</h2>
+            <p>Imagine your computer's hard drive as a <strong>massive warehouse</strong>. A file system is like the organization system that tells you:</p>
+            <ul>
+                <li>Where things are stored (which shelf/aisle)</li>
+                <li>What's in each box</li>
+                <li>How big each item is</li>
+                <li>Which boxes belong to the same item</li>
+            </ul>
+            <p>Without a file system, your computer would just see random 1s and 0s with no way to know what's what!</p>
+
+            <!-- Section 2 -->
+            <h2 id="what-is-fat"><span class="emoji">📋</span> What is FAT (File Allocation Table)?</h2>
+            <p>FAT stands for <strong>File Allocation Table</strong>. Think of it like a GPS map for your files:</p>
+            
+            <div class="info-box">
+                <p><strong>Analogy:</strong></p>
+                <ul>
+                    <li><strong>Your Hard Drive</strong> = A city with 2048 houses (blocks)</li>
+                    <li><strong>FAT</strong> = A map showing which houses belong to which person (file)</li>
+                    <li><strong>Directory</strong> = A phone book listing everyone's names and their first house number</li>
+                </ul>
+            </div>
+
+            <h3>Real-World Library Analogy</h3>
+            <p>Imagine you have a library book that's too big for one shelf:</p>
+            <ul>
+                <li><strong>Directory Entry:</strong> "Harry Potter is on shelf #5, total pages: 800"</li>
+                <li><strong>FAT (the map):</strong> Shelf 5 → points to Shelf 12 → points to Shelf 23 → END</li>
+                <li><strong>The actual shelves:</strong> Contain the actual book pages</li>
+            </ul>
+
+            <!-- Section 3 -->
+            <h2 id="structure"><span class="emoji">🏗️</span> Our Simple FAT File System Structure</h2>
+            
+            <h3>The Disk Layout</h3>
+            <p>Our "disk" is actually just a file called <span class="inline-code">diskfile.bin</span> that pretends to be a real hard drive:</p>
+            
+            <div class="diagram">
++----------------+  Block 0 (4096 bytes)
+|  ROOT DIR      |  ← Where we store the list of files
++----------------+  Block 1 (4096 bytes)
+|  FAT TABLE     |  ← The "map" showing which blocks belong to which files
++----------------+  Block 2 (4096 bytes)
+|  (free)        |  ← Available for storing file data
++----------------+  Block 3 (4096 bytes)
+|  (free)        |
++----------------+
+|     ...        |
++----------------+  Block 2047 (4096 bytes)
+|  (free)        |
++----------------+
+            </div>
+
+            <div class="info-box">
+                <h4>Important Numbers:</h4>
+                <ul>
+                    <li><strong>Total blocks:</strong> 2048 (like 2048 houses in our city)</li>
+                    <li><strong>Block size:</strong> 4096 bytes (each "house" can hold 4096 letters)</li>
+                    <li><strong>Block 0:</strong> Always the root directory</li>
+                    <li><strong>Block 1:</strong> Always the FAT table</li>
+                </ul>
+            </div>
+
+            <h3>What's in a Directory Entry?</h3>
+            <p>Each file/folder in a directory has an entry that looks like this:</p>
+            
+            <div class="code-block">
+struct dir_entry {
+    char file_name[56];      // Name: "myfile.txt" (max 55 chars)
+    uint32_t size;           // Size: 1234 bytes
+    uint16_t first_blk;      // First block: starts at block #5
+    uint8_t type;            // Type: 0=file, 1=directory
+    uint8_t access_rights;   // Rights: read/write/execute
+};
+// Total: 64 bytes per entry
+            </div>
+
+            <div class="success-box">
+                <p><strong>How many files fit in one directory?</strong></p>
+                <ul>
+                    <li>Each directory is 1 block = 4096 bytes</li>
+                    <li>Each entry = 64 bytes</li>
+                    <li>4096 ÷ 64 = <span class="highlight">64 files maximum per directory</span></li>
+                </ul>
+            </div>
+
+            <h3>How the FAT Works</h3>
+            <p>The FAT is an array where each entry tells you what comes next:</p>
+            
+            <div class="diagram">
+FAT Index:    [0]  [1]  [2]  [3]  [4]  [5]  [6]  [7]  ...
+FAT Value:    -1   -1    0    7    5    -1   0    -1  ...
+
+Legend:
+  0   = FREE (this block is available)
+ -1   = EOF (End Of File - last block of a file)
+ N    = Next block number (chain continues at block N)
+            </div>
+
+            <div class="visual-example">
+                <h4>Example: File stored in blocks 3 → 4 → 5</h4>
+                <div class="code-block">
+FAT[3] = 4   (block 3 points to block 4)
+FAT[4] = 5   (block 4 points to block 5)
+FAT[5] = -1  (block 5 is the last one - EOF)
+                </div>
+            </div>
+
+            <!-- Section 4 -->
+            <h2 id="operations"><span class="emoji">⚙️</span> The Four Main Operations</h2>
+
+            <!-- Format -->
+            <h3>1. <span class="inline-code">format()</span> - Initialize the File System</h3>
+            <p><strong>What it does:</strong> Prepares a blank disk, like formatting a USB drive.</p>
+            
+            <p><strong>Step by step:</strong></p>
+            <ol>
+                <li>Create an empty FAT table (set everything to 0 = FREE)</li>
+                <li>Mark special blocks as used:
+                    <ul>
+                        <li>FAT[0] = -1 (block 0 is the root directory)</li>
+                        <li>FAT[1] = -1 (block 1 is the FAT itself)</li>
+                    </ul>
+                </li>
+                <li>Clear the root directory (make it empty)</li>
+                <li>Save the FAT to disk (block 1)</li>
+            </ol>
+
+            <div class="code-block">
+int FS::format() {
+    // Step 1: Clear FAT - everything is free
+    for (int i = 0; i < BLOCK_SIZE/2; i++) {
+        fat[i] = FAT_FREE;  // 0 means free
+    }
+    
+    // Step 2: Mark reserved blocks
+    fat[ROOT_BLOCK] = FAT_EOF;  // Block 0 (root dir) is used
+    fat[FAT_BLOCK] = FAT_EOF;   // Block 1 (FAT itself) is used
+    
+    // Step 3: Write FAT to disk
+    write_fat();  // Save our map to block 1
+    
+    // Step 4: Clear root directory
+    uint8_t root_block[BLOCK_SIZE];
+    memset(root_block, 0, BLOCK_SIZE);  // Fill with zeros
+    disk.write(ROOT_BLOCK, root_block); // Save to block 0
+    
+    current_dir_block = ROOT_BLOCK;
+    return 0;
+}
+            </div>
+
+            <div class="visual-example">
+                <h4>Before format:</h4>
+                <div class="diagram">Disk: [????][????][????][????]...</div>
+                <h4>After format:</h4>
+                <div class="diagram">
+Disk: [Empty Dir][FAT][Free][Free]...
+FAT:  [-1][-1][0][0][0][0]...
+                </div>
+            </div>
+
+            <!-- Create -->
+            <h3>2. <span class="inline-code">create(filename)</span> - Create a New File</h3>
+            <p><strong>What it does:</strong> Creates a new file and writes data to it.</p>
+            
+            <p><strong>Example:</strong> Creating a file named "hello.txt" with content "Hello World!\n"</p>
+
+            <p><strong>Step by step:</strong></p>
+            <ol>
+                <li><span class="step-number">1</span> <strong>Check if filename is valid</strong> (max 55 characters)</li>
+                <li><span class="step-number">2</span> <strong>Check if file already exists</strong> (no duplicates allowed)</li>
+                <li><span class="step-number">3</span> <strong>Read user input</strong> (keep reading until empty line)</li>
+                <li><span class="step-number">4</span> <strong>Calculate blocks needed</strong></li>
+                <li><span class="step-number">5</span> <strong>Find free blocks in FAT</strong></li>
+                <li><span class="step-number">6</span> <strong>Chain blocks together</strong> (if multiple blocks needed)</li>
+                <li><span class="step-number">7</span> <strong>Write data to blocks</strong></li>
+                <li><span class="step-number">8</span> <strong>Create directory entry</strong></li>
+                <li><span class="step-number">9</span> <strong>Save directory and FAT to disk</strong></li>
+            </ol>
+
+            <div class="info-box">
+                <h4>Calculating Blocks Needed:</h4>
+                <p>26 bytes ÷ 4096 bytes per block = 0.006... → Round up = <strong>1 block needed</strong></p>
+                <p>5000 bytes ÷ 4096 = 1.22... → Round up = <strong>2 blocks needed</strong></p>
+            </div>
+
+            <div class="visual-example">
+                <h4>Visual Example:</h4>
+                <p><strong>Before:</strong></p>
+                <div class="code-block">
+ROOT DIR: [empty][empty][empty]...
+FAT:      [-1][-1][0][0][0]...
+Block 2:  [garbage data]
+                </div>
+                <p><strong>After:</strong></p>
+                <div class="code-block">
+ROOT DIR: [{name:"hello.txt", size:26, first_blk:2}][empty]...
+FAT:      [-1][-1][-1][0][0]...  (block 2 now marked as EOF)
+Block 2:  "Hello World!\nHow are you?\n\0\0\0..."
+                </div>
+            </div>
+
+            <!-- Cat -->
+            <h3>3. <span class="inline-code">cat(filename)</span> - Read and Display a File</h3>
+            <p><strong>What it does:</strong> Reads a file and prints its contents to the screen.</p>
+
+            <p><strong>Step by step:</strong></p>
+            <ol>
+                <li><strong>Search the directory for the file</strong></li>
+                <li><strong>Read the FAT to find all blocks</strong></li>
+                <li><strong>Read each block and print its contents</strong></li>
+            </ol>
+
+            <div class="info-box">
+                <h4>Multi-block example:</h4>
+                <p>If file was in blocks 2 → 5 → 8:</p>
+                <ul>
+                    <li>Read block 2 → print 4096 bytes</li>
+                    <li>FAT[2] = 5, so continue...</li>
+                    <li>Read block 5 → print 4096 bytes</li>
+                    <li>FAT[5] = 8, so continue...</li>
+                    <li>Read block 8 → print remaining bytes</li>
+                    <li>FAT[8] = -1, STOP</li>
+                </ul>
+            </div>
+
+            <!-- LS -->
+            <h3>4. <span class="inline-code">ls()</span> - List Directory Contents</h3>
+            <p><strong>What it does:</strong> Shows all files in the current directory.</p>
+
+            <p><strong>Step by step:</strong></p>
+            <ol>
+                <li>Read the directory block</li>
+                <li>Print header: "name\t size"</li>
+                <li>Loop through all 64 entries and print non-empty ones</li>
+            </ol>
+
+            <div class="success-box">
+                <h4>Example output:</h4>
+                <div class="code-block">
+name         size
+hello.txt    26
+bigfile.dat  4129
+notes.txt    150
+                </div>
+            </div>
+
+            <!-- Section 5: Helpers -->
+            <h2 id="helpers"><span class="emoji">🛠️</span> Helper Functions Explained</h2>
+
+            <h3><span class="inline-code">read_fat()</span> - Load FAT from Disk</h3>
+            <div class="code-block">
+void FS::read_fat() {
+    uint8_t block[BLOCK_SIZE];     // Temporary buffer
+    disk.read(FAT_BLOCK, block);   // Read block 1 from disk
+    memcpy(fat, block, BLOCK_SIZE); // Copy to our FAT array
+}
+            </div>
+
+            <h3><span class="inline-code">write_fat()</span> - Save FAT to Disk</h3>
+            <div class="code-block">
+void FS::write_fat() {
+    uint8_t block[BLOCK_SIZE];      // Temporary buffer
+    memcpy(block, fat, BLOCK_SIZE); // Copy from our FAT array
+    disk.write(FAT_BLOCK, block);   // Write to block 1
+}
+            </div>
+
+            <h3><span class="inline-code">find_free_block()</span> - Find Next Available Block</h3>
+            <div class="code-block">
+int16_t FS::find_free_block() {
+    for (int i = 2; i < BLOCK_SIZE/2; i++) {  // Start at 2 (skip root & FAT)
+        if (fat[i] == FAT_FREE) {              // If this block is free
+            return i;                          // Return its index
+        }
+    }
+    return -1;  // No free blocks found!
+}
+            </div>
+
+            <!-- Section 6: Testing -->
+            <h2 id="testing"><span class="emoji">🧪</span> How to Test Your Implementation</h2>
+
+            <h3>Option 1: Automated Test</h3>
+            <div class="code-block">
+# Compile
+wsl bash -c "cd /mnt/c/Users/Kokoo/Downloads/lab2_code/lab2_code && make test1"
+
+# Run test
+wsl bash -c "cd /mnt/c/Users/Kokoo/Downloads/lab2_code/lab2_code && ./test1"
+            </div>
+
+            <div class="success-box">
+                <h4>What the test checks:</h4>
+                <ul>
+                    <li>✅ Format creates empty directory</li>
+                    <li>✅ Create small file (16 bytes)</li>
+                    <li>✅ Create large file (4129 bytes = 2 blocks)</li>
+                    <li>✅ Cat reads file correctly</li>
+                    <li>✅ Filename length limit (55 chars max)</li>
+                    <li>✅ Directory capacity (64 files max)</li>
+                </ul>
+            </div>
+
+            <h3>Option 2: Manual Interactive Test</h3>
+            <div class="code-block">
+filesystem> format
+filesystem> ls
+name     size
+filesystem> create myfile
+Enter data. Empty line to end.
+Hello World!
+This is my first file!
+
+filesystem> ls
+name        size
+myfile      36
+filesystem> cat myfile
+Hello World!
+This is my first file!
+filesystem> quit
+            </div>
+
+            <!-- Section 7: Errors -->
+            <h2 id="errors"><span class="emoji">⚠️</span> Common Errors and Solutions</h2>
+
+            <div class="warning-box">
+                <h4>Error: "Filename too long"</h4>
+                <p><strong>Cause:</strong> Filename exceeds 55 characters</p>
+                <p><strong>Solution:</strong> Use shorter filenames (max 55 chars including extension)</p>
+            </div>
+
+            <div class="warning-box">
+                <h4>Error: "File already exists"</h4>
+                <p><strong>Cause:</strong> Trying to create a file with a name that already exists</p>
+                <p><strong>Solution:</strong> Choose a different filename or delete the old one first</p>
+            </div>
+
+            <div class="warning-box">
+                <h4>Error: "Directory is full"</h4>
+                <p><strong>Cause:</strong> Directory already has 64 files (maximum capacity)</p>
+                <p><strong>Solution:</strong> Delete some files first (will implement in Task 2)</p>
+            </div>
+
+            <div class="warning-box">
+                <h4>Error: "Disk is full"</h4>
+                <p><strong>Cause:</strong> No free blocks available in FAT</p>
+                <p><strong>Solution:</strong> Delete some files to free up space</p>
+            </div>
+
+            <div class="warning-box">
+                <h4>Error: "File not found"</h4>
+                <p><strong>Cause:</strong> Trying to read a file that doesn't exist</p>
+                <p><strong>Solution:</strong> Check spelling or use <span class="inline-code">ls</span> to see available files</p>
+            </div>
+
+            <!-- Section 8: Summary -->
+            <h2 id="summary"><span class="emoji">📝</span> Key Concepts Summary</h2>
+
+            <table>
+                <tr>
+                    <th>Concept</th>
+                    <th>Simple Explanation</th>
+                </tr>
+                <tr>
+                    <td><strong>Block</strong></td>
+                    <td>A fixed-size chunk of disk (4096 bytes) - like a storage box</td>
+                </tr>
+                <tr>
+                    <td><strong>FAT</strong></td>
+                    <td>A map showing which blocks belong to which files</td>
+                </tr>
+                <tr>
+                    <td><strong>Directory</strong></td>
+                    <td>A list of files/folders with their metadata</td>
+                </tr>
+                <tr>
+                    <td><strong>FAT_FREE (0)</strong></td>
+                    <td>This block is available for use</td>
+                </tr>
+                <tr>
+                    <td><strong>FAT_EOF (-1)</strong></td>
+                    <td>This is the last block of a file</td>
+                </tr>
+                <tr>
+                    <td><strong>Chain</strong></td>
+                    <td>Following blocks: block 3 → 7 → 12 → EOF</td>
+                </tr>
+                <tr>
+                    <td><strong>Directory Entry</strong></td>
+                    <td>Metadata about one file (name, size, location, etc.)</td>
+                </tr>
+            </table>
+
+            <div class="success-box">
+                <h3><span class="emoji">🎉</span> What We Built</h3>
+                <p><strong>We now have a working file system that can:</strong></p>
+                <ul>
+                    <li>✅ Initialize a blank disk</li>
+                    <li>✅ Create files of any size</li>
+                    <li>✅ Read file contents</li>
+                    <li>✅ List all files</li>
+                    <li>✅ Handle multi-block files</li>
+                    <li>✅ Validate inputs and show errors</li>
+                </ul>
+                <p><strong>Next: Task 2</strong> will add copy, move, delete, and append operations!</p>
+            </div>
+        </div>
+
+        <footer>
+            <p>📚 FAT File System Lab - Task 1 Complete ✨</p>
+            <p>Created with ❤️ for Operating Systems Course</p>
+        </footer>
+    </div>
+</body>
+</html>
