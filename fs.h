@@ -39,6 +39,13 @@ private:
     int find_free_dir_entry(uint16_t dir_block);
     dir_entry* read_dir_entries(uint16_t dir_block);
     void write_dir_entries(uint16_t dir_block, dir_entry* entries);
+    
+    // Path resolution helpers
+    // Resolves a path and returns the directory block containing the target and the target name
+    // Returns -1 on error, 0 on success
+    int resolve_path(const std::string& path, uint16_t& dir_block, std::string& name);
+    // Find entry in a directory, returns entry index or -1 if not found
+    int find_entry_in_dir(uint16_t dir_block, const std::string& name);
 
 public:
     FS();
