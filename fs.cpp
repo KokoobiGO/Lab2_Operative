@@ -230,7 +230,7 @@ FS::cat(std::string filepath)
     
     // Find file
     dir_entry* file_entry = nullptr;
-    for (int i = 0; i < BLOCK_SIZE / sizeof(dir_entry); i++) {
+    for (int i = 0; i < BLOCK_SIZE / (int)sizeof(dir_entry); i++) {
         if (entries[i].file_name[0] != '\0' && 
             std::strcmp(entries[i].file_name, filepath.c_str()) == 0) {
             file_entry = &entries[i];
@@ -239,9 +239,14 @@ FS::cat(std::string filepath)
     }
     
     if (file_entry == nullptr) {
-        std::cout << "Error: File not found\n";
         delete[] entries;
         return -1;
+    }
+    
+    // Check if it's a directory
+    if (file_entry->type == TYPE_DIR) {
+        delete[] entries;
+        return -1; // Cannot cat a directory
     }
     
     // Read FAT
@@ -276,12 +281,17 @@ FS::ls()
     dir_entry* entries = read_dir_entries(current_dir_block);
     
     // Print header
-    std::cout << "name\t size\n";
+    std::cout << "name\t type\t size\n";
     
     // Print each file/directory
-    for (int i = 0; i < BLOCK_SIZE / sizeof(dir_entry); i++) {
+    for (int i = 0; i < BLOCK_SIZE / (int)sizeof(dir_entry); i++) {
         if (entries[i].file_name[0] != '\0') {
-            std::cout << entries[i].file_name << "\t " << entries[i].size << "\n";
+            std::cout << entries[i].file_name << "\t ";
+            if (entries[i].type == TYPE_DIR) {
+                std::cout << "dir\t -\n";
+            } else {
+                std::cout << "file\t " << entries[i].size << "\n";
+            }
         }
     }
     
@@ -483,7 +493,7 @@ FS::rm(std::string filepath)
     // Read current directory
     dir_entry* entries = read_dir_entries(current_dir_block);
     
-    // Find file
+    // Find file/directory
     int file_idx = -1;
     for (int i = 0; i < BLOCK_SIZE / (int)sizeof(dir_entry); i++) {
         if (entries[i].file_name[0] != '\0' && 
@@ -498,21 +508,38 @@ FS::rm(std::string filepath)
         return -1;
     }
     
-    // Check if it's a file (not a directory)
-    if (entries[file_idx].type != TYPE_FILE) {
-        delete[] entries;
-        return -1;
-    }
-    
     // Read FAT
     read_fat();
     
-    // Free all blocks used by the file
-    int16_t current_block = entries[file_idx].first_blk;
-    while (current_block != FAT_EOF && current_block != FAT_FREE) {
-        int16_t next_block = fat[current_block];
-        fat[current_block] = FAT_FREE;
-        current_block = next_block;
+    // Handle directory case
+    if (entries[file_idx].type == TYPE_DIR) {
+        // Check if directory is empty (only contains '..')
+        dir_entry* dir_entries = read_dir_entries(entries[file_idx].first_blk);
+        bool is_empty = true;
+        for (int i = 0; i < BLOCK_SIZE / (int)sizeof(dir_entry); i++) {
+            if (dir_entries[i].file_name[0] != '\0' && 
+                std::strcmp(dir_entries[i].file_name, "..") != 0) {
+                is_empty = false;
+                break;
+            }
+        }
+        delete[] dir_entries;
+        
+        if (!is_empty) {
+            delete[] entries;
+            return -1; // Directory not empty
+        }
+        
+        // Free the directory block
+        fat[entries[file_idx].first_blk] = FAT_FREE;
+    } else {
+        // Free all blocks used by the file
+        int16_t current_block = entries[file_idx].first_blk;
+        while (current_block != FAT_EOF && current_block != FAT_FREE) {
+            int16_t next_block = fat[current_block];
+            fat[current_block] = FAT_FREE;
+            current_block = next_block;
+        }
     }
     
     // Write FAT to disk
@@ -658,7 +685,70 @@ FS::append(std::string filepath1, std::string filepath2)
 int
 FS::mkdir(std::string dirpath)
 {
-    std::cout << "FS::mkdir(" << dirpath << ")\n";
+    // Check dirname length
+    if (dirpath.length() > 55) {
+        return -1;
+    }
+    
+    // Read current directory
+    dir_entry* entries = read_dir_entries(current_dir_block);
+    
+    // Check if name already exists
+    for (int i = 0; i < BLOCK_SIZE / (int)sizeof(dir_entry); i++) {
+        if (entries[i].file_name[0] != '\0' && 
+            std::strcmp(entries[i].file_name, dirpath.c_str()) == 0) {
+            delete[] entries;
+            return -1; // Already exists
+        }
+    }
+    
+    // Find free directory entry in current directory
+    int free_entry_idx = find_free_dir_entry(current_dir_block);
+    if (free_entry_idx == -1) {
+        delete[] entries;
+        return -1;
+    }
+    
+    // Read FAT
+    read_fat();
+    
+    // Find a free block for the new directory
+    int16_t new_dir_block = find_free_block();
+    if (new_dir_block == -1) {
+        delete[] entries;
+        return -1;
+    }
+    
+    // Mark the new block as EOF in FAT
+    fat[new_dir_block] = FAT_EOF;
+    write_fat();
+    
+    // Initialize the new directory block (empty except for '..')
+    dir_entry* new_dir_entries = new dir_entry[BLOCK_SIZE / sizeof(dir_entry)];
+    std::memset(new_dir_entries, 0, BLOCK_SIZE);
+    
+    // Create '..' entry pointing to parent directory
+    std::strcpy(new_dir_entries[0].file_name, "..");
+    new_dir_entries[0].size = 0;
+    new_dir_entries[0].first_blk = current_dir_block;
+    new_dir_entries[0].type = TYPE_DIR;
+    new_dir_entries[0].access_rights = READ | WRITE | EXECUTE;
+    
+    // Write new directory to disk
+    write_dir_entries(new_dir_block, new_dir_entries);
+    delete[] new_dir_entries;
+    
+    // Create directory entry in current directory
+    std::strcpy(entries[free_entry_idx].file_name, dirpath.c_str());
+    entries[free_entry_idx].size = 0;
+    entries[free_entry_idx].first_blk = new_dir_block;
+    entries[free_entry_idx].type = TYPE_DIR;
+    entries[free_entry_idx].access_rights = READ | WRITE | EXECUTE;
+    
+    // Write current directory back to disk
+    write_dir_entries(current_dir_block, entries);
+    
+    delete[] entries;
     return 0;
 }
 
@@ -666,7 +756,40 @@ FS::mkdir(std::string dirpath)
 int
 FS::cd(std::string dirpath)
 {
-    std::cout << "FS::cd(" << dirpath << ")\n";
+    // Handle special case: cd to root
+    if (dirpath == "/") {
+        current_dir_block = ROOT_BLOCK;
+        return 0;
+    }
+    
+    // Read current directory
+    dir_entry* entries = read_dir_entries(current_dir_block);
+    
+    // Find the directory
+    int dir_idx = -1;
+    for (int i = 0; i < BLOCK_SIZE / (int)sizeof(dir_entry); i++) {
+        if (entries[i].file_name[0] != '\0' && 
+            std::strcmp(entries[i].file_name, dirpath.c_str()) == 0) {
+            dir_idx = i;
+            break;
+        }
+    }
+    
+    if (dir_idx == -1) {
+        delete[] entries;
+        return -1; // Directory not found
+    }
+    
+    // Check if it's a directory
+    if (entries[dir_idx].type != TYPE_DIR) {
+        delete[] entries;
+        return -1; // Not a directory
+    }
+    
+    // Change to the directory
+    current_dir_block = entries[dir_idx].first_blk;
+    
+    delete[] entries;
     return 0;
 }
 
@@ -675,7 +798,52 @@ FS::cd(std::string dirpath)
 int
 FS::pwd()
 {
-    std::cout << "/\n";
+    // If we're at root, just print /
+    if (current_dir_block == ROOT_BLOCK) {
+        std::cout << "/\n";
+        return 0;
+    }
+    
+    // Build path by traversing from current to root
+    std::string path = "";
+    uint16_t block = current_dir_block;
+    
+    while (block != ROOT_BLOCK) {
+        // Read the current directory to find '..' entry
+        dir_entry* entries = read_dir_entries(block);
+        
+        uint16_t parent_block = ROOT_BLOCK;
+        for (int i = 0; i < BLOCK_SIZE / (int)sizeof(dir_entry); i++) {
+            if (entries[i].file_name[0] != '\0' && 
+                std::strcmp(entries[i].file_name, "..") == 0) {
+                parent_block = entries[i].first_blk;
+                break;
+            }
+        }
+        delete[] entries;
+        
+        // Read parent directory to find current directory's name
+        dir_entry* parent_entries = read_dir_entries(parent_block);
+        std::string dir_name = "";
+        
+        for (int i = 0; i < BLOCK_SIZE / (int)sizeof(dir_entry); i++) {
+            if (parent_entries[i].file_name[0] != '\0' && 
+                parent_entries[i].type == TYPE_DIR &&
+                parent_entries[i].first_blk == block) {
+                dir_name = parent_entries[i].file_name;
+                break;
+            }
+        }
+        delete[] parent_entries;
+        
+        // Prepend to path
+        path = "/" + dir_name + path;
+        
+        // Move to parent
+        block = parent_block;
+    }
+    
+    std::cout << path << "\n";
     return 0;
 }
 
