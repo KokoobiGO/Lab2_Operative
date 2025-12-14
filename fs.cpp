@@ -348,6 +348,13 @@ FS::cat(std::string filepath)
         return -1; // Cannot cat a directory
     }
     
+    // Check read permission
+    if (!(entries[file_idx].access_rights & READ)) {
+        std::cout << "Error: No read permission\n";
+        delete[] entries;
+        return -1;
+    }
+    
     // Read FAT
     read_fat();
     
@@ -440,9 +447,26 @@ FS::cp(std::string sourcepath, std::string destpath)
     // Resolve dest path
     uint16_t dest_dir_block;
     std::string dest_name;
-    if (resolve_path(destpath, dest_dir_block, dest_name) != 0 || dest_name.empty()) {
+    if (resolve_path(destpath, dest_dir_block, dest_name) != 0) {
         delete[] src_entries;
         return -1;
+    }
+    
+    // Check if dest_name is an existing directory - if so, copy INTO it with source filename
+    if (!dest_name.empty()) {
+        int dest_idx = find_entry_in_dir(dest_dir_block, dest_name);
+        if (dest_idx != -1) {
+            dir_entry* check_entries = read_dir_entries(dest_dir_block);
+            if (check_entries[dest_idx].type == TYPE_DIR) {
+                // Dest is a directory, copy file into it with source name
+                dest_dir_block = check_entries[dest_idx].first_blk;
+                dest_name = src_name;
+            }
+            delete[] check_entries;
+        }
+    } else {
+        // dest is "/" or similar - use source name
+        dest_name = src_name;
     }
     
     // Check dest filename length
@@ -451,7 +475,7 @@ FS::cp(std::string sourcepath, std::string destpath)
         return -1;
     }
     
-    // Check if dest file already exists
+    // Check if dest file already exists in target directory
     if (find_entry_in_dir(dest_dir_block, dest_name) != -1) {
         delete[] src_entries;
         return -1; // Dest already exists (noclobber)
@@ -574,9 +598,26 @@ FS::mv(std::string sourcepath, std::string destpath)
     // Resolve dest path
     uint16_t dest_dir_block;
     std::string dest_name;
-    if (resolve_path(destpath, dest_dir_block, dest_name) != 0 || dest_name.empty()) {
+    if (resolve_path(destpath, dest_dir_block, dest_name) != 0) {
         delete[] src_entries;
         return -1;
+    }
+    
+    // Check if dest_name is an existing directory - if so, move INTO it with source filename
+    if (!dest_name.empty()) {
+        int dest_check_idx = find_entry_in_dir(dest_dir_block, dest_name);
+        if (dest_check_idx != -1) {
+            dir_entry* check_entries = read_dir_entries(dest_dir_block);
+            if (check_entries[dest_check_idx].type == TYPE_DIR) {
+                // Dest is a directory, move file into it with source name
+                dest_dir_block = check_entries[dest_check_idx].first_blk;
+                dest_name = src_name;
+            }
+            delete[] check_entries;
+        }
+    } else {
+        // dest is "/" or similar - use source name
+        dest_name = src_name;
     }
     
     // Check dest filename length
@@ -585,7 +626,7 @@ FS::mv(std::string sourcepath, std::string destpath)
         return -1;
     }
     
-    // Check if dest file already exists
+    // Check if dest file already exists in target directory
     if (find_entry_in_dir(dest_dir_block, dest_name) != -1) {
         delete[] src_entries;
         return -1; // Dest already exists (noclobber)
@@ -730,6 +771,20 @@ FS::append(std::string filepath1, std::string filepath2)
     
     // Check both are files (not directories)
     if (file1_entries[file1_idx].type != TYPE_FILE || file2_entries[file2_idx].type != TYPE_FILE) {
+        delete[] file1_entries;
+        delete[] file2_entries;
+        return -1;
+    }
+    
+    // Check access rights: need READ on file1, WRITE on file2
+    if (!(file1_entries[file1_idx].access_rights & READ)) {
+        std::cout << "Error: No read permission on source file\n";
+        delete[] file1_entries;
+        delete[] file2_entries;
+        return -1;
+    }
+    if (!(file2_entries[file2_idx].access_rights & WRITE)) {
+        std::cout << "Error: No write permission on destination file\n";
         delete[] file1_entries;
         delete[] file2_entries;
         return -1;
