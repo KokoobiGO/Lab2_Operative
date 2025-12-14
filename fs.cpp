@@ -294,7 +294,132 @@ FS::ls()
 int
 FS::cp(std::string sourcepath, std::string destpath)
 {
-    std::cout << "FS::cp(" << sourcepath << "," << destpath << ")\n";
+    // Check dest filename length
+    if (destpath.length() > 55) {
+        return -1;
+    }
+    
+    // Read current directory
+    dir_entry* entries = read_dir_entries(current_dir_block);
+    
+    // Find source file
+    dir_entry* src_entry = nullptr;
+    int src_idx = -1;
+    for (int i = 0; i < BLOCK_SIZE / (int)sizeof(dir_entry); i++) {
+        if (entries[i].file_name[0] != '\0' && 
+            std::strcmp(entries[i].file_name, sourcepath.c_str()) == 0) {
+            src_entry = &entries[i];
+            src_idx = i;
+            break;
+        }
+    }
+    
+    if (src_entry == nullptr) {
+        delete[] entries;
+        return -1;
+    }
+    
+    // Check if source is a file (not a directory)
+    if (src_entry->type != TYPE_FILE) {
+        delete[] entries;
+        return -1;
+    }
+    
+    // Check if dest file already exists
+    for (int i = 0; i < BLOCK_SIZE / (int)sizeof(dir_entry); i++) {
+        if (entries[i].file_name[0] != '\0' && 
+            std::strcmp(entries[i].file_name, destpath.c_str()) == 0) {
+            delete[] entries;
+            return -1; // Dest already exists (noclobber)
+        }
+    }
+    
+    // Find free directory entry for dest
+    int dest_entry_idx = find_free_dir_entry(current_dir_block);
+    if (dest_entry_idx == -1) {
+        delete[] entries;
+        return -1;
+    }
+    
+    // Read FAT
+    read_fat();
+    
+    // Read source file data
+    std::string data;
+    uint8_t block[BLOCK_SIZE];
+    int16_t current_block = src_entry->first_blk;
+    uint32_t bytes_remaining = src_entry->size;
+    
+    while (current_block != FAT_EOF && bytes_remaining > 0) {
+        disk.read(current_block, block);
+        uint32_t bytes_to_read = std::min((uint32_t)BLOCK_SIZE, bytes_remaining);
+        data.append((char*)block, bytes_to_read);
+        bytes_remaining -= bytes_to_read;
+        current_block = fat[current_block];
+    }
+    
+    uint32_t data_size = data.length();
+    
+    // Calculate number of blocks needed
+    int blocks_needed = (data_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    if (blocks_needed == 0) blocks_needed = 1;
+    
+    // Allocate blocks for dest file
+    int16_t first_block = -1;
+    int16_t prev_block = -1;
+    
+    for (int i = 0; i < blocks_needed; i++) {
+        int16_t free_block = find_free_block();
+        if (free_block == -1) {
+            delete[] entries;
+            return -1;
+        }
+        
+        if (first_block == -1) {
+            first_block = free_block;
+        }
+        
+        if (prev_block != -1) {
+            fat[prev_block] = free_block;
+        }
+        
+        fat[free_block] = FAT_EOF;
+        prev_block = free_block;
+    }
+    
+    // Write data to new blocks
+    current_block = first_block;
+    uint32_t offset = 0;
+    
+    while (current_block != FAT_EOF) {
+        std::memset(block, 0, BLOCK_SIZE);
+        uint32_t bytes_to_write = std::min((uint32_t)BLOCK_SIZE, data_size - offset);
+        if (bytes_to_write > 0) {
+            std::memcpy(block, data.c_str() + offset, bytes_to_write);
+        }
+        disk.write(current_block, block);
+        offset += bytes_to_write;
+        current_block = fat[current_block];
+    }
+    
+    // Write FAT to disk
+    write_fat();
+    
+    // Re-read entries (may have changed)
+    delete[] entries;
+    entries = read_dir_entries(current_dir_block);
+    
+    // Create directory entry for dest
+    std::strcpy(entries[dest_entry_idx].file_name, destpath.c_str());
+    entries[dest_entry_idx].size = data_size;
+    entries[dest_entry_idx].first_blk = first_block;
+    entries[dest_entry_idx].type = TYPE_FILE;
+    entries[dest_entry_idx].access_rights = READ | WRITE;
+    
+    // Write directory back to disk
+    write_dir_entries(current_dir_block, entries);
+    
+    delete[] entries;
     return 0;
 }
 
@@ -303,7 +428,51 @@ FS::cp(std::string sourcepath, std::string destpath)
 int
 FS::mv(std::string sourcepath, std::string destpath)
 {
-    std::cout << "FS::mv(" << sourcepath << "," << destpath << ")\n";
+    // Check dest filename length
+    if (destpath.length() > 55) {
+        return -1;
+    }
+    
+    // Read current directory
+    dir_entry* entries = read_dir_entries(current_dir_block);
+    
+    // Find source file
+    int src_idx = -1;
+    for (int i = 0; i < BLOCK_SIZE / (int)sizeof(dir_entry); i++) {
+        if (entries[i].file_name[0] != '\0' && 
+            std::strcmp(entries[i].file_name, sourcepath.c_str()) == 0) {
+            src_idx = i;
+            break;
+        }
+    }
+    
+    if (src_idx == -1) {
+        delete[] entries;
+        return -1;
+    }
+    
+    // Check if source is a file (not a directory)
+    if (entries[src_idx].type != TYPE_FILE) {
+        delete[] entries;
+        return -1;
+    }
+    
+    // Check if dest file already exists
+    for (int i = 0; i < BLOCK_SIZE / (int)sizeof(dir_entry); i++) {
+        if (entries[i].file_name[0] != '\0' && 
+            std::strcmp(entries[i].file_name, destpath.c_str()) == 0) {
+            delete[] entries;
+            return -1; // Dest already exists (noclobber)
+        }
+    }
+    
+    // Simply rename the file (just change the name in directory entry)
+    std::strcpy(entries[src_idx].file_name, destpath.c_str());
+    
+    // Write directory back to disk
+    write_dir_entries(current_dir_block, entries);
+    
+    delete[] entries;
     return 0;
 }
 
@@ -311,7 +480,51 @@ FS::mv(std::string sourcepath, std::string destpath)
 int
 FS::rm(std::string filepath)
 {
-    std::cout << "FS::rm(" << filepath << ")\n";
+    // Read current directory
+    dir_entry* entries = read_dir_entries(current_dir_block);
+    
+    // Find file
+    int file_idx = -1;
+    for (int i = 0; i < BLOCK_SIZE / (int)sizeof(dir_entry); i++) {
+        if (entries[i].file_name[0] != '\0' && 
+            std::strcmp(entries[i].file_name, filepath.c_str()) == 0) {
+            file_idx = i;
+            break;
+        }
+    }
+    
+    if (file_idx == -1) {
+        delete[] entries;
+        return -1;
+    }
+    
+    // Check if it's a file (not a directory)
+    if (entries[file_idx].type != TYPE_FILE) {
+        delete[] entries;
+        return -1;
+    }
+    
+    // Read FAT
+    read_fat();
+    
+    // Free all blocks used by the file
+    int16_t current_block = entries[file_idx].first_blk;
+    while (current_block != FAT_EOF && current_block != FAT_FREE) {
+        int16_t next_block = fat[current_block];
+        fat[current_block] = FAT_FREE;
+        current_block = next_block;
+    }
+    
+    // Write FAT to disk
+    write_fat();
+    
+    // Clear directory entry
+    std::memset(&entries[file_idx], 0, sizeof(dir_entry));
+    
+    // Write directory back to disk
+    write_dir_entries(current_dir_block, entries);
+    
+    delete[] entries;
     return 0;
 }
 
@@ -320,7 +533,123 @@ FS::rm(std::string filepath)
 int
 FS::append(std::string filepath1, std::string filepath2)
 {
-    std::cout << "FS::append(" << filepath1 << "," << filepath2 << ")\n";
+    // Read current directory
+    dir_entry* entries = read_dir_entries(current_dir_block);
+    
+    // Find file1 (source)
+    int file1_idx = -1;
+    for (int i = 0; i < BLOCK_SIZE / (int)sizeof(dir_entry); i++) {
+        if (entries[i].file_name[0] != '\0' && 
+            std::strcmp(entries[i].file_name, filepath1.c_str()) == 0) {
+            file1_idx = i;
+            break;
+        }
+    }
+    
+    if (file1_idx == -1) {
+        delete[] entries;
+        return -1;
+    }
+    
+    // Find file2 (destination)
+    int file2_idx = -1;
+    for (int i = 0; i < BLOCK_SIZE / (int)sizeof(dir_entry); i++) {
+        if (entries[i].file_name[0] != '\0' && 
+            std::strcmp(entries[i].file_name, filepath2.c_str()) == 0) {
+            file2_idx = i;
+            break;
+        }
+    }
+    
+    if (file2_idx == -1) {
+        delete[] entries;
+        return -1;
+    }
+    
+    // Check both are files (not directories)
+    if (entries[file1_idx].type != TYPE_FILE || entries[file2_idx].type != TYPE_FILE) {
+        delete[] entries;
+        return -1;
+    }
+    
+    // Read FAT
+    read_fat();
+    
+    // Read file1 data
+    std::string file1_data;
+    uint8_t block[BLOCK_SIZE];
+    int16_t current_block = entries[file1_idx].first_blk;
+    uint32_t bytes_remaining = entries[file1_idx].size;
+    
+    while (current_block != FAT_EOF && bytes_remaining > 0) {
+        disk.read(current_block, block);
+        uint32_t bytes_to_read = std::min((uint32_t)BLOCK_SIZE, bytes_remaining);
+        file1_data.append((char*)block, bytes_to_read);
+        bytes_remaining -= bytes_to_read;
+        current_block = fat[current_block];
+    }
+    
+    if (file1_data.empty()) {
+        delete[] entries;
+        return 0; // Nothing to append
+    }
+    
+    // Find the last block of file2
+    int16_t last_block = entries[file2_idx].first_blk;
+    while (fat[last_block] != FAT_EOF) {
+        last_block = fat[last_block];
+    }
+    
+    // Calculate how many bytes are used in the last block
+    uint32_t file2_size = entries[file2_idx].size;
+    uint32_t bytes_in_last_block = file2_size % BLOCK_SIZE;
+    if (bytes_in_last_block == 0 && file2_size > 0) {
+        bytes_in_last_block = BLOCK_SIZE; // Last block is full
+    }
+    
+    // Read the last block of file2
+    disk.read(last_block, block);
+    
+    // Append file1 data
+    uint32_t file1_offset = 0;
+    uint32_t file1_size = file1_data.length();
+    
+    while (file1_offset < file1_size) {
+        uint32_t space_in_block = BLOCK_SIZE - bytes_in_last_block;
+        uint32_t bytes_to_write = std::min(space_in_block, file1_size - file1_offset);
+        
+        if (bytes_to_write > 0) {
+            std::memcpy(block + bytes_in_last_block, file1_data.c_str() + file1_offset, bytes_to_write);
+            disk.write(last_block, block);
+            file1_offset += bytes_to_write;
+            bytes_in_last_block += bytes_to_write;
+        }
+        
+        // If we still have data to write and the block is full, allocate a new block
+        if (file1_offset < file1_size && bytes_in_last_block >= BLOCK_SIZE) {
+            int16_t new_block = find_free_block();
+            if (new_block == -1) {
+                delete[] entries;
+                return -1;
+            }
+            fat[last_block] = new_block;
+            fat[new_block] = FAT_EOF;
+            last_block = new_block;
+            bytes_in_last_block = 0;
+            std::memset(block, 0, BLOCK_SIZE);
+        }
+    }
+    
+    // Write FAT to disk
+    write_fat();
+    
+    // Update file2 size
+    entries[file2_idx].size += file1_size;
+    
+    // Write directory back to disk
+    write_dir_entries(current_dir_block, entries);
+    
+    delete[] entries;
     return 0;
 }
 
